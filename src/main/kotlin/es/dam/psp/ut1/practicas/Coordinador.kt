@@ -1,5 +1,6 @@
 package org.example.es.dam.psp.ut1.practicas
 
+import es.dam.psp.ut1.Jvm
 import java.io.File
 import kotlin.time.measureTime
 
@@ -25,33 +26,55 @@ data class Resultado(
     val masFrecuente: String
 )
 
-const val CLASE_HIJO = "es.dam.psp.ut1.practicas.ContadorKt"   // main de Contador.kt
+const val CLASE_HIJO = "org.example.es.dam.psp.ut1.practicas.Contador"
 
 /**
  * Crea y ARRANCA un proceso Contador cuya entrada estándar sea [fichero].
  * Pista: Jvm.proceso(...) y redirectInput(...). Hereda la salida de error del hijo.
  */
-fun lanzarContador(fichero: File): Process {
-    TODO("Práctica 4.a")   // TODO 4.a
-}
+fun lanzarContador(fichero: File): Process =
+    Jvm.proceso("org.example.es.dam.psp.ut1.practicas.ContadorKt")
+        .redirectInput(fichero)
+        .redirectError(ProcessBuilder.Redirect.INHERIT)
+        .start()
 
 /**
  * Lee la línea que ha escrito el hijo, espera a que termine y construye el Resultado.
  * Si el código de salida no es 0, lanza una IllegalStateException con un mensaje claro.
  */
 fun recogerResultado(fichero: File, hijo: Process): Resultado {
-    TODO("Práctica 4.b")   // TODO 4.b
+    val linea = hijo.inputStream.bufferedReader().readLine()
+    val codigo = hijo.waitFor()
+    if (codigo != 0) throw IllegalStateException("Contador falló con código $codigo en ${fichero.name}")
+    val (lineas, palabras, caracteres, frecuente) = linea.split(";", limit = 4)
+    return Resultado(fichero.name, lineas.toLong(), palabras.toLong(), caracteres.toLong(), frecuente)
 }
 
 /** Procesa los ficheros uno detrás de otro: lanzar, esperar, lanzar, esperar... */
-fun secuencial(ficheros: List<File>): List<Resultado> {
-    TODO("Práctica 4.c")   // TODO 4.c
-}
+fun secuencial(ficheros: List<File>): List<Resultado> =
+    ficheros.map { f -> recogerResultado(f, lanzarContador(f)) }
 
 /** Lanza TODOS los hijos a la vez y después recoge los resultados. */
 fun concurrente(ficheros: List<File>): List<Resultado> {
-    TODO("Práctica 4.d")   // TODO 4.d
+    val hijos = ficheros.map { lanzarContador(it) }            // 1. lanzar todos
+    return ficheros.zip(hijos).map { (f, h) -> recogerResultado(f, h) }   // 2. recoger
 }
+
+fun imprimirTabla(resultados: List<Resultado>) {
+    val formato = "%-14s %10s %10s %12s  %s"
+    println(formato.format("FICHERO", "LINEAS", "PALABRAS", "CARACTERES", "MAS FRECUENTE"))
+    resultados.forEach { r ->
+        println(formato.format(r.fichero, r.lineas, r.palabras, r.caracteres, r.masFrecuente))
+    }
+    println(formato.format(
+        "TOTAL",
+        resultados.sumOf { it.lineas },
+        resultados.sumOf { it.palabras },
+        resultados.sumOf { it.caracteres },
+        "-"
+    ))
+}
+
 
 fun main() {
     // Ruta relativa: datos/ dentro del directorio de trabajo (la raíz del proyecto en IntelliJ)
@@ -69,6 +92,8 @@ fun main() {
 
     // TODO 4.e: muestra una tabla con el resultado de cada fichero y una fila TOTAL
     //  (líneas, palabras y caracteres sumados). Comprueba que r1 y r2 coinciden.
+    imprimirTabla(r1)
+    println("¿Secuencial y concurrente dan el mismo resultado? ${r1 == r2}")
 
     println("Secuencial:  $t1")
     println("Concurrente: $t2")
